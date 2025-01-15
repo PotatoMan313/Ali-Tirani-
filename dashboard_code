@@ -1,0 +1,99 @@
+# Import required libraries
+import pandas as pd
+import dash
+from dash import dcc, html
+from dash.dependencies import Input, Output
+import plotly.express as px
+
+# Read the SpaceX data
+df = pd.read_csv(r"C:\adminstrator\Downloads\spacex_launch_dash.csv")
+max_payload = df['Payload Mass (kg)'].max()
+min_payload = df['Payload Mass (kg)'].min()
+
+# Create a dash application
+app = dash.Dash(__name__)
+
+# Prepare the launch site options for the dropdown
+launch_sites = [{'label': 'All Sites', 'value': 'All Sites'}]
+launch_sites += [{'label': site, 'value': site} for site in df["Launch Site"].unique()]
+
+# Create an app layout
+app.layout = html.Div(children=[
+    html.H1('SpaceX Launch Records Dashboard',
+            style={'textAlign': 'center', 'color': '#503D36', 'font-size': 40}),
+
+    # Dropdown for Launch Site selection
+    dcc.Dropdown(
+        id='site-dropdown',
+        options=launch_sites,
+        value='All Sites',
+        placeholder="Select a Launch Site here",
+        searchable=True
+    ),
+    html.Br(),
+
+    # Pie chart for successful launches
+    html.Div(dcc.Graph(id='success-pie-chart')),
+    html.Br(),
+
+    # Payload range slider
+    html.P("Payload range (Kg):"),
+    dcc.RangeSlider(
+        id='payload-slider',
+        min=0, max=10000, step=1000,
+        value=[min_payload, max_payload],
+        marks={
+            2500: {'label': '2500 (Kg)'},
+            5000: {'label': '5000 (Kg)'},
+            7500: {'label': '7500 (Kg)'}
+        }
+    ),
+
+    # Scatter chart for payload vs. success
+    html.Div(dcc.Graph(id='success-payload-scatter-chart'))
+])
+
+# Callback for the pie chart
+@app.callback(
+    Output(component_id='success-pie-chart', component_property='figure'),
+    Input(component_id='site-dropdown', component_property='value')
+)
+def update_pie_chart(site):
+    if site == 'All Sites':
+        grouped = df.groupby('Launch Site')['class'].sum().reset_index()
+        fig = px.pie(grouped, values='class', names='Launch Site',
+                     title='Total Success Launches by Site')
+    else:
+        site_data = df[df['Launch Site'] == site]
+        success_count = site_data['class'].sum()
+        fail_count = len(site_data) - success_count
+        fig = px.pie(
+            names=['Success', 'Failure'],
+            values=[success_count, fail_count],
+            title=f'Success vs. Failure for {site}'
+        )
+    return fig
+
+# Callback for the scatter chart
+@app.callback(
+    Output(component_id='success-payload-scatter-chart', component_property='figure'),
+    [Input(component_id='site-dropdown', component_property='value'),
+     Input(component_id='payload-slider', component_property='value')]
+)
+def update_scatter_chart(site, payload_range):
+    filtered_df = df[(df['Payload Mass (kg)'] >= payload_range[0]) &
+                     (df['Payload Mass (kg)'] <= payload_range[1])]
+
+    if site != 'All Sites':
+        filtered_df = filtered_df[filtered_df['Launch Site'] == site]
+
+    fig = px.scatter(
+        filtered_df, x='Payload Mass (kg)', y='class',
+        color='Booster Version',
+        title=f'Payload vs. Outcome for {site}'
+    )
+    return fig
+
+# Run the app
+if __name__ == '__main__':
+    app.run_server(debug=True)
