@@ -89,7 +89,7 @@ def update_scatter_chart(site, payload_range):
 
     fig = px.scatter(
         filtered_df, x='Payload Mass (kg)', y='class',
-        color='Booster Version',
+        color='Booster Version Category',
         title=f'Payload vs. Outcome for {site}'
     )
     return fig
